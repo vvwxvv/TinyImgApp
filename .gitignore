@@ -23,3 +23,18 @@ appenv/
 
 # Logs
 *.log
+
+
+# --- appended by GitHubPushApp ---
+# Node
+node_modules/
+# Large/binary artifacts
+*.zip
+*.tar
+*.tar.gz
+*.7z
+*.pt
+*.pth
+*.onnx
+*.bin
+*.safetensors
