@@ -1,0 +1,44 @@
+{
+  "app": {
+    "title": "Tiny Image",
+    "logo": "static/cover.png",
+    "size": [540, 900],
+    "accent": "#d2edf2",
+    "accent_hover": "#d2edf2"
+  },
+    "params": [
+      {
+        "name": "folder",
+        "type": "folder",
+        "label": "Select Image Folder",
+        "required": true,
+        "tooltip": "All images in subfolders will be processed recursively."
+      },
+      {
+        "name": "output_root",
+        "type": "folder",
+        "label": "Output Root Folder (optional)",
+        "required": false,
+        "tooltip": "If set, output will preserve folder structure under this root. If not, '_tiny_imgs' subfolders will be created inside each source folder."
+      },
+      {
+        "name": "target_size",
+        "type": "select",
+        "label": "Target Size (KB)",
+        "options": [100, 200, 300, 400, 500, 600, 700, 800, 900],
+        "default": 700,
+        "tooltip": "Desired output file size in kilobytes."
+      },
+      {
+        "name": "output_format",
+        "type": "select",
+        "label": "Output Format",
+        "options": ["png", "webp"],
+        "default": "png",
+        "tooltip": "Convert all images to this format."
+      }
+    ],
+    "run": {
+      "label": "Start Compression"
+    }
+  }

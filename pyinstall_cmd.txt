@@ -1,0 +1,1 @@
+pyinstaller --onedir --name "TinyImg" --icon "static\favicon.ico" --add-data "static;static" --add-data "src/configs/tiny_img_ui_config.json;src/configs" --clean main.py
