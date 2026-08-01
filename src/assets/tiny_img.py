@@ -14,7 +14,7 @@ SUPPORTED_FORMATS = {'PNG', 'WEBP', 'JPEG'}
 
 
 # ----------------------------------------------------------------------
-# 单张图片压缩
+# 单张图片压缩（支持格式转换）
 # ----------------------------------------------------------------------
 def compress_image(
     input_path: str,
@@ -25,6 +25,10 @@ def compress_image(
     max_quality: int = 95,
     max_iterations: int = 12,
 ) -> Tuple[str, int]:
+    """
+    压缩单张图片到目标大小（KB），可选转换格式。
+    返回 (输出路径, 最终字节数)。
+    """
     if output_path is None:
         output_path = input_path
 
@@ -39,6 +43,7 @@ def compress_image(
         if out_fmt not in SUPPORTED_FORMATS:
             raise ValueError(f"Unsupported output format: {out_fmt}")
 
+        # 颜色模式适配
         if out_fmt == 'JPEG' and img.mode != 'RGB':
             img = img.convert('RGB')
         elif out_fmt in ('PNG', 'WEBP') and img.mode not in ('RGB', 'RGBA'):
@@ -46,7 +51,7 @@ def compress_image(
 
         working_img = img.copy()
 
-        # ---- 1. 不缩放 ----
+        # ---- 1. 尝试不缩放压缩 ----
         if out_fmt in ('JPEG', 'WEBP'):
             quality = _compress_lossy(
                 working_img, out_fmt, target_bytes,
@@ -60,6 +65,7 @@ def compress_image(
                     return output_path, size
 
         elif out_fmt == 'PNG':
+            # 无损
             with io.BytesIO() as buf:
                 working_img.save(buf, format='PNG', optimize=True, compress_level=9)
                 size = buf.tell()
@@ -67,6 +73,7 @@ def compress_image(
                     _write_output(buf, output_path)
                     return output_path, size
 
+            # 量化颜色
             for colors in [256, 128, 64, 32]:
                 quantized = _quantize_png(working_img, colors)
                 with io.BytesIO() as buf:
@@ -76,7 +83,7 @@ def compress_image(
                         _write_output(buf, output_path)
                         return output_path, size
 
-        # ---- 2. 缩放 ----
+        # ---- 2. 缩放后重试 ----
         scale = 0.9
         while scale > 0.3:
             new_w = int(working_img.width * scale)
@@ -114,7 +121,7 @@ def compress_image(
 
 
 # ----------------------------------------------------------------------
-# 文件夹批处理（自动获取文件夹名并添加格式后缀）
+# 文件夹批处理（输出基于根目录名 + 后缀，内部结构完整保留）
 # ----------------------------------------------------------------------
 def compress_folder(
     folder: str,
@@ -124,10 +131,20 @@ def compress_folder(
     recursive: bool = True,
     progress_callback: Optional[Callable[[int], None]] = None,
 ) -> str:
+    """
+    递归压缩文件夹内所有图片。
+
+    输出规则：
+      - 始终基于输入根目录的文件夹名生成输出根目录：<根目录名>_tiny_imgs_<格式>
+      - 内部所有子目录结构完全保留
+      - 如果指定了 output_root，则输出到 output_root 下；
+        否则在原输入目录同级生成
+    """
     root = Path(folder)
     if not root.is_dir():
         return f"'{folder}' is not a valid folder."
 
+    # 收集所有图片文件
     files: List[Path] = []
     for ext in SUPPORTED_EXTS:
         if recursive:
@@ -147,25 +164,23 @@ def compress_folder(
         raise ValueError("output_format must be 'png' or 'webp'")
 
     output_base = Path(output_root) if output_root else root
+    suffix = f"_tiny_imgs_{out_fmt}"
 
-    # 文件夹后缀包含格式信息
-    folder_suffix = f"_tiny_imgs_{out_fmt}"
+    # ★ 核心改动：输出根目录 = <输入根目录名> + suffix
+    base_out_dir = output_base / (root.name + suffix)
 
     errors = []
     processed = 0
 
     for src_path in files:
         try:
+            # 计算相对于输入根的相对路径
             rel_path = src_path.relative_to(root)
+            # 保留所有父目录（包括子目录结构）
             parent_rel = rel_path.parent
 
-            if str(parent_rel) == '.':
-                # 根目录下的文件：使用根文件夹名 + suffix
-                out_dir = output_base / (root.name + folder_suffix)
-            else:
-                # 子目录：使用父目录名 + suffix
-                out_dir = output_base / parent_rel.parent / (parent_rel.name + folder_suffix)
-
+            # 输出目录 = base_out_dir / parent_rel
+            out_dir = base_out_dir / parent_rel
             out_filename = src_path.stem + f".{out_fmt}"
             out_path = out_dir / out_filename
 
@@ -182,11 +197,12 @@ def compress_folder(
         if progress_callback:
             progress_callback(int(processed / total * 100))
 
+    # 生成总结信息
     msg = f"Compressed {processed} file(s) to {target_size_kb} KB ({output_format.upper()})."
     if output_root:
         msg += f"\nOutput saved under: {output_base}"
     else:
-        msg += f"\nOutput saved in '{folder_suffix}' folders alongside original directories."
+        msg += f"\nOutput saved in '{base_out_dir.name}' alongside original directory."
     if errors:
         msg += f"\n{len(errors)} error(s):\n" + "\n".join(errors)
     return msg
@@ -238,7 +254,7 @@ def _write_output(buf, path):
 
 
 # ----------------------------------------------------------------------
-# CLI 入口
+# CLI 入口（支持单张或文件夹）
 # ----------------------------------------------------------------------
 def main():
     import argparse
@@ -285,6 +301,7 @@ def main():
             )
             print("\n" + result)
         else:
+            # 单张图片
             in_path = args.input
             out_path = args.output
             if out_path is None:
